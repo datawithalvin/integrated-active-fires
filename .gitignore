@@ -1,27 +1,20 @@
-# Virtual environment
 venv/
 .env
 
-# Byte-compiled files
 ./pipelines/__pycache__/
 *.pyc
 *.pyo
 
-# Build and distribution
 build/
 dist/
 *.egg-info
 
-# IDE configurations
 .idea/
 .vscode/
 
-# OS-specific files
 .DS_Store
 
-# Log and temporary files
 *.log
 *.tmp
 
-# Sensitive information
 ./pipelines/config.py
