@@ -26,7 +26,7 @@ def main():
     token = TOKEN 
     today = datetime.date.today()
     yesterday = str(today - datetime.timedelta(days=1))
-    day_range = "7"
+    day_range = "2"
 
     viirs_data = fetch_viirs_data(today=yesterday, day_range=day_range, token=token)
     print(viirs_data)

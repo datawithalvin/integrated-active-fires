@@ -29,16 +29,14 @@ def fetch_viirs_data(today: str, day_range: str, token: str) -> pl.DataFrame:
 
         source = "VIIRS_SNPP_NRT"
         country = "IDN"
-        # today = "2023-08-31"
-        # day_range = "2"
 
         url = (host + token + "/" + source + "/" + country + "/" + day_range + "/" + today)
 
-        get_data = reqs.get(url)
-        get_data.raise_for_status() # Raises an HTTPError if the HTTP request returned an unsuccessful status code
+        # get_data = reqs.get(url)
+        # get_data.raise_for_status() # Raises an HTTPError if the HTTP request returned an unsuccessful status code
 
-        csv_content = io.StringIO(get_data.text)
-        viirs_df = pl.read_csv(csv_content)
+        # csv_content = io.StringIO(get_data.text)
+        viirs_df = pl.read_csv(url)
         
         return viirs_df
 
