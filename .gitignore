@@ -1,27 +1,27 @@
-# Virtual environment
-venv/
+.venv-pm25/
 .env
 
-# Byte-compiled files
-./pipelines/__pycache__/
+./pipeline-scripts/__pycache__/
 *.pyc
 *.pyo
 
-# Build and distribution
 build/
 dist/
 *.egg-info
 
-# IDE configurations
 .idea/
 .vscode/
 
-# OS-specific files
 .DS_Store
 
-# Log and temporary files
 *.log
 *.tmp
 
-# Sensitive information
-./pipelines/config.py
+./src/config.py
+
+./data/viirs-yearly-summary/desktop.ini
+
+setup.py
+src.egg-info
+
+.gitignore

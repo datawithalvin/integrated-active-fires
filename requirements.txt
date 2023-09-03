@@ -1,0 +1,12 @@
+polars==0.19.1
+pandas==2.1.0
+bs4==0.0.1
+newspaper3k==0.2.8
+nltk==3.8.1
+SQLAlchemy==2.0.17
+tensorflow==2.13
+transformers==4.32.1
+psycopg2-binary==2.9.7
+psycopg-binary==3.1.10
+connectorx
+adbc-driver-sqlite
