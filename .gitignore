@@ -1,7 +1,7 @@
 .venv-pm25/
 .env
 
-./pipeline-scripts/__pycache__/
+.pipeline-scripts/__pycache__/
 *.pyc
 *.pyo
 
@@ -17,9 +17,9 @@ dist/
 *.log
 *.tmp
 
-./src/config.py
+.src/config.py
 
-./data/viirs-yearly-summary/desktop.ini
+.data/viirs-yearly-summary/desktop.ini
 
 setup.py
 src.egg-info
