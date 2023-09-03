@@ -6,7 +6,6 @@ import datetime
 import os
 from supabase import create_client, Client
 
-from src.config import TOKEN, SUPABASE_KEY, SUPABASE_URL
 # ----------------------------------------------------- ******************************** -----------------------------------------------------
 def fetch_viirs_data(today: str, day_range: str, token: str) -> pl.DataFrame:
     """

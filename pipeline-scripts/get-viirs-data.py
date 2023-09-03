@@ -12,10 +12,10 @@ from selenium.webdriver.chrome.service import Service as ChromeService
 from webdriver_manager.chrome import ChromeDriverManager
 import time
 
-from src.config import TOKEN
 from src.procedures import fetch_viirs_data
+from dotenv import dotenv_values
 
-
+config = dotenv_values("./.env")
 # ------------------------------****************--------------------------------------#
 
 def main():
@@ -23,14 +23,14 @@ def main():
     # # Build connection
     # connection = connect_to_db("election")
 
-    token = TOKEN 
+    token = config.get("TOKEN")
     today = datetime.date.today()
     yesterday = str(today - datetime.timedelta(days=1))
-    day_range = "2"
+    day_range = "1"
 
     viirs_data = fetch_viirs_data(today=yesterday, day_range=day_range, token=token)
     print(viirs_data)
-    # print(start_date)
+    print(token)
 
 # ------------------------------****************--------------------------------------#
 if __name__ == "__main__":
