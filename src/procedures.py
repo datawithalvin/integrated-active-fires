@@ -6,21 +6,21 @@ import datetime
 import os
 from supabase import create_client, Client
 
+from dotenv import dotenv_values
+
 # ----------------------------------------------------- ******************************** -----------------------------------------------------
 def fetch_viirs_data(today: str, day_range: str, token: str) -> pl.DataFrame:
     """
-    Retrieves VIIRS active fires data from the NASA FIRMS API for a given date and range.
+    Retrieves VIIRS active fires data from the NASA FIRMS API for a given date and date range.
 
     Parameters:
     - today (str): The specific date for which the data is to be retrieved, in the format "YYYY-MM-DD".
-    - day_range (str): The range of days for which the data is to be retrieved.
-    - token (str): The token from FIRMS API.
+    - day_range (str): The range of days for which the data is to be retrieved, e.g., "3" for the last 3 days.
+    - token (str): The token obtained from the FIRMS API.
 
     Returns:
-    - pl.DataFrame: A Polars DataFrame containing the VIIRS data if successful, or None if an error occurred.
-
-    Examples:
-    >>> get_viirs_data("2023-08-19", "1")
+    - pl.DataFrame: A Polars DataFrame containing the VIIRS active fires data if the retrieval is successful, 
+                    or None if an error occurred during retrieval.
     """
 
     try:
@@ -30,11 +30,6 @@ def fetch_viirs_data(today: str, day_range: str, token: str) -> pl.DataFrame:
         country = "IDN"
 
         url = (host + token + "/" + source + "/" + country + "/" + day_range + "/" + today)
-
-        # get_data = reqs.get(url)
-        # get_data.raise_for_status() # Raises an HTTPError if the HTTP request returned an unsuccessful status code
-
-        # csv_content = io.StringIO(get_data.text)
         viirs_df = pl.read_csv(url)
         
         return viirs_df
@@ -47,53 +42,73 @@ def fetch_viirs_data(today: str, day_range: str, token: str) -> pl.DataFrame:
         return None
 
 # ----------------------------------------------------- ******************************** -----------------------------------------------------
-def query_data_from_db(engine, query):
+def fetch_last_data(query: str, uri_connection: str) -> pl.DataFrame:
     """
-    Perform data transformation from a database using a given SQL query
-    
-    Args:
-        connection: A connection object
-        query (str): SQL query
+    Retrieves the most recently updated data from the database based on the provided SQL query.
+
+    Parameters:
+    - query (str): The SQL query string used to fetch the data.
+    - uri_connection (str): The connection URI to the Supabase database.
+
     Returns:
-        df: A dataframe containing the transformed data
+    - pl.DataFrame: A DataFrame containing the last updated data retrieved from the database.
     """
-    df = None
     try:
-        df = pd.read_sql_query(query, con=engine)
-        print("Data fetched successfully.")
+        last_data = pl.read_database_uri(query=query, uri=uri_connection)
+        return last_data
+    
     except Exception as e:
-        print(f"Error occurred during data fetching: {e}")
-    return df
+        print(f"An unexpected error occurred: {e}")
+        return None
 
 # ----------------------------------------------------- ******************************** -----------------------------------------------------
-def get_table(connection, tablename):
-    """Fetch tables from the database. Load it into a dataframe.
-    
-    Args:
-        connection: A connection object
-        tablename (str): The name of the table
+def cleaning_fetched_data(df: pl.DataFrame) -> pl.DataFrame:
+    """
+    Cleans the newly fetched data by dropping unnecessary columns, adding a new column,
+    and casting columns to align with the data types of the last fetched data from the database.
+
+    Parameters:
+    - df (pl.DataFrame): A Polars DataFrame containing the fetched data to be cleaned.
+
     Returns:
-        df: A dataframe containing the fetched data
+    - pl.DataFrame: A cleaned Polars DataFrame with aligned column data types.
     """
-    query = f"""
-        SELECT *
-        FROM
-            {tablename};
-    """
-    table_df = query_data_from_db(connection, query)
-    return table_df
+
+    try:
+        # Add a new 'type' column with default value None
+        df = df.with_columns(
+            type=pl.lit(None)
+        )
+
+        # Select and cast specific columns to align with the desired data types
+        df = df.select(
+            pl.col("latitude").cast(pl.Float64),
+            pl.col("longitude").cast(pl.Float64),
+            pl.col("bright_ti4").cast(pl.Float32).alias("brightness"),
+            pl.col("scan").cast(pl.Float32),
+            pl.col("track").cast(pl.Float32),
+            pl.col("acq_date").str.strptime(pl.Date, "%Y-%m-%d"),
+            pl.col("acq_time").cast(pl.Int32),
+            pl.col("satellite").cast(pl.Utf8),
+            pl.col("instrument").cast(pl.Utf8),
+            pl.col("confidence").cast(pl.Utf8),
+            pl.col("version").cast(pl.Utf8),
+            pl.col("bright_ti5").cast(pl.Float32).alias("bright_t31"),
+            pl.col("frp").cast(pl.Float32),
+            pl.col("daynight").cast(pl.Utf8),
+            pl.col("type").cast(pl.Int32)
+        )
+
+        return df
+
+    except Exception as e:
+        print(f"An error occurred while cleaning the data: {e}")
+        return None
 
 # ----------------------------------------------------- ******************************** -----------------------------------------------------
-# url: str = os.environ.get("SUPABASE_URL")
-# key: str = os.environ.get("SUPABASE_KEY")
-# supabase: Client = create_client(url, key)
-    
+
+
 # ----------------------------------------------------- ******************************** -----------------------------------------------------
-# try to call the function
-# today = str(datetime.date.today())
-# today = "2023-08-19"
-# day_range = "1"
 
-# viirs_df = fetch_viirs_data(today, day_range, TOKEN)
 
-# print(viirs_df)
+# ----------------------------------------------------- ******************************** -----------------------------------------------------
