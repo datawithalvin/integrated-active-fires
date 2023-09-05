@@ -1,38 +1,39 @@
 # import libraries
 import polars as pl
-import pandas as pd
-import datetime
-import requests
 
-from src.procedures import fetch_viirs_data, fetch_last_data, cleaning_fetched_data
+from src.procedures import fetch_air_quality_data, cleaning_aqms_data
 from dotenv import dotenv_values
 
 config = dotenv_values("./.env")
 
 # ------------------------------****************--------------------------------------#
 def main():
-    endpoint = "https://sipongi.menlhk.go.id/api/aqms"
+    """
+    Fetches air quality data, cleans it, and appends the cleaned data to the database.
 
-    r = requests.get(endpoint, 
-                     headers={'Accept': 'application/json'})
+    This function fetches air quality data from an API, cleans the data,
+    and appends the cleaned data to a database table.
+    """
+    try:
+        # Fetch air quality data and clean it
+        aqms_pl = fetch_air_quality_data()
+        if aqms_pl is None:
+            print("Failed to fetch air quality data.")
+            return
+        aqms_pl = cleaning_aqms_data(aqms_pl)
+        if aqms_pl is None:
+            print("Failed to clean air quality data.")
+            return
 
-    aqms_json = r.json()
+        # Append the cleaned data to the database
+        CONNECTION_URI = config.get("CONNECTION_URI")
+        aqms_pl.write_database(table_name="air_quality_idn", connection=CONNECTION_URI, if_exists="append")
 
-    aqms_df = pd.json_normalize(aqms_json["features"])
+        with pl.Config(tbl_cols=10):
+            print(aqms_pl)
 
-    # Select the desired columns
-    columns_to_select = ["properties.alamat", "geometry.coordinates", "properties.kota", "properties.provinsi", "properties.val", "properties.nilai", "properties.cat"]
-    aqms_df = aqms_df[columns_to_select]
-
-    # Rename the columns
-    aqms_df.columns = ["alamat", "coordinates", "kota", "provinsi", "val", "nilai", "cat"]
-
-    # # print(aqms_json)
-    # # print(f"Response: {r.json()}")
-
-    # aqms_df = pl.read_json(aqms_json)
-
-    print(aqms_df)
+    except Exception as e:
+        print(f"An error occurred in the main pipeline: {e}")
 
 
 # ------------------------------****************--------------------------------------#

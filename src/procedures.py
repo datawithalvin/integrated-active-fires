@@ -1,7 +1,7 @@
 import polars as pl
 import pandas as pd
 import io
-import requests as reqs
+import requests
 import datetime
 import os
 from supabase import create_client, Client
@@ -34,7 +34,7 @@ def fetch_viirs_data(today: str, day_range: str, token: str) -> pl.DataFrame:
         
         return viirs_df
 
-    except reqs.RequestException as e:
+    except requests.RequestException as e:
         print(f"An error occurred while making the HTTP request: {e}")
         return None
     except Exception as e:
@@ -106,9 +106,74 @@ def cleaning_fetched_data(df: pl.DataFrame) -> pl.DataFrame:
         return None
 
 # ----------------------------------------------------- ******************************** -----------------------------------------------------
+def fetch_air_quality_data() -> pl.DataFrame:
+    """
+    Fetches air quality data from the provided API endpoint, processes it, and returns a Polars DataFrame.
 
+    Returns:
+    - pl.DataFrame: A Polars DataFrame containing the processed air quality data.
+    """
+    try:
+        # Set endpoint, request it and extract the JSON object by parsing it into a Pandas DataFrame
+        endpoint = "https://sipongi.menlhk.go.id/api/aqms"
+        r = requests.get(endpoint, headers={'Accept': 'application/json'})
+        aqms_json = r.json()
+        aqms_df = pd.json_normalize(aqms_json["features"])
+
+        # Select the desired columns, and rename them
+        columns_to_select = ["properties.alamat", "geometry.coordinates", "properties.kota", "properties.provinsi", "properties.nilai", "properties.cat", "properties.waktu"]
+        aqms_df = aqms_df[columns_to_select]
+        aqms_df.columns = ["address", "coordinates", "city", "province", "air_quality_index", "category", "updated_at"]
+        aqms_df["latitude"] = aqms_df["coordinates"].apply(lambda x: x[1])
+        aqms_df["longitude"] = aqms_df["coordinates"].apply(lambda x: x[0])
+        aqms_df.drop(columns=["coordinates"], inplace=True)
+
+        # Add a new "fetched_date" column with today's date
+        today_date = datetime.date.today()
+        aqms_df["fetched_date"] = today_date
+
+        aqms_df.dropna(subset=["air_quality_index"], inplace=True)
+
+        # Convert to a Polars DataFrame
+        pl_aqms = pl.from_pandas(aqms_df)
+
+        return pl_aqms
+
+    except Exception as e:
+        print(f"An error occurred while fetching air quality data: {e}")
+        return None
 
 # ----------------------------------------------------- ******************************** -----------------------------------------------------
+def cleaning_aqms_data(df: pl.DataFrame) -> pl.DataFrame:
+    """
+    Cleans the provided air quality data Polars DataFrame by reordering columns,
+    renaming columns, and converting data types.
 
+    Parameters:
+    - df (pl.DataFrame): The Polars DataFrame containing air quality data to be cleaned.
+
+    Returns:
+    - pl.DataFrame: A cleaned Polars DataFrame with reordered columns, renamed columns,
+      and converted data types.
+    """
+    try:
+        # Reorder, rename, and cast data types of the columns
+        df = df.select(
+            pl.col("latitude").cast(pl.Utf8).alias("lat_sensor"),
+            pl.col("longitude").cast(pl.Utf8).alias("lon_sensor"),
+            pl.col("address"),
+            pl.col("city").str.to_titlecase(),
+            pl.col("province").str.to_titlecase(),
+            pl.col("air_quality_index").cast(pl.Int16),
+            pl.col("category").str.to_titlecase().cast(pl.Categorical),
+            pl.col("updated_at").str.to_datetime("%Y-%m-%d %H:%M:%S"),
+            pl.col("fetched_date"),
+        )
+
+        return df
+
+    except Exception as e:
+        print(f"An error occurred while cleaning the data: {e}")
+        return None
 
 # ----------------------------------------------------- ******************************** -----------------------------------------------------

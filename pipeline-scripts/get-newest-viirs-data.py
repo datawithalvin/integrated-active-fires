@@ -39,12 +39,14 @@ def main():
         last_data = last_data.drop(["id"])  # Drop unused column to avoid conflicts when appending
 
         # Concatenate both dataframes, remove duplicates, and maintain order
-        concat_viirs = pl.concat([viirs_data, last_data])
+        concat_viirs = pl.concat([last_data, viirs_data], how="vertical_relaxed")
         concat_viirs = concat_viirs.unique(keep="none", maintain_order=False)
 
         # Append the final dataframe into the database
         concat_viirs.write_database(table_name="viirs_snpp_raw", connection=CONNECTION_URI, if_exists="append")
-        print(concat_viirs)
+        with pl.Config(tbl_cols=20):
+            print(concat_viirs)
+            print(viirs_data)
 
     except Exception as e:
         print(f"An error occurred in the main pipeline: {e}")
