@@ -10,3 +10,5 @@ psycopg2-binary==2.9.7
 psycopg-binary==3.1.10
 connectorx
 adbc-driver-sqlite
+newspaper3k
+gnews==0.3.1

@@ -3,7 +3,13 @@ import pandas as pd
 import io
 import requests
 import datetime
+import time
 import os
+
+from gnews import GNews
+import nltk
+from newspaper import Article
+
 from supabase import create_client, Client
 
 from dotenv import dotenv_values
@@ -174,6 +180,148 @@ def cleaning_aqms_data(df: pl.DataFrame) -> pl.DataFrame:
 
     except Exception as e:
         print(f"An error occurred while cleaning the data: {e}")
+        return None
+
+# ----------------------------------------------------- ******************************** -----------------------------------------------------
+
+def fetch_articles(keywords_list: list, max_results: int, day_range: int) -> pd.DataFrame:
+    """
+    Fetches news articles using the Google News API for a list of keywords,
+    extracts relevant information, and returns a concatenated DataFrame.
+
+    Parameters:
+    - keywords_list (list): List of keywords to search for in the news articles.
+    - max_results (int): Maximum number of news articles to retrieve for each keyword.
+    - day_range (int): Number of days in the past to search for news articles.
+
+    Returns:
+    - pd.DataFrame: A concatenated DataFrame containing relevant information from the retrieved articles.
+    """
+    concatenated_df = pd.DataFrame()
+
+    try:
+        for keywords in keywords_list:
+            # Initialize the Google News client
+            google_news = GNews(language='id', country="Indonesia", max_results=max_results)
+            today = datetime.datetime.now().date()
+
+            start_date = (today - datetime.timedelta(days=day_range))
+            end_date = today
+            google_news.start_date = start_date
+            google_news.end_date = end_date
+
+            # Get news articles based on keywords
+            get_news = google_news.get_news(keywords)
+
+            # Parse the article data into a DataFrame
+            articles_df = pd.DataFrame(get_news)
+
+            # Check if the necessary columns are present in the DataFrame
+            column_names = ["publisher", "title", "description", "published date", "url"]
+            if all(col in articles_df.columns for col in column_names):
+                articles_df = articles_df[column_names]
+            else:
+                return None
+
+            # Extract full text and image URLs of the articles
+            articles = []
+            images = []
+
+            for url in articles_df["url"]:
+                try:
+                    # Download the article content and extract the text
+                    get_article = Article(url)
+                    get_article.download()
+                    get_article.parse()
+                    full_text = get_article.text
+
+                    # Try to get the image URL and append it to the list
+                    image = list(get_article.images)[0] if get_article.images else None
+                    images.append(image)
+
+                    articles.append(full_text)
+
+                except Exception as e:
+                    # If there is an error, append an error message to the summary list and set the image URL to None
+                    print(f"Error downloading article from {url}: {e}")
+                    articles.append("Error: article download failed")
+                    images.append(None)
+
+                # Sleep for a short time to avoid being blocked by the website
+                time.sleep(1)
+
+            # Add the full text and image URL columns to the DataFrame
+            articles_df["article_text"] = articles
+            articles_df['image'] = images
+
+            def count_words(text):
+                words = text.split()
+                return len(words)
+            
+            articles_df['word_count'] = articles_df['article_text'].apply(count_words)
+            articles_df = articles_df[articles_df['word_count'] >= 2]
+            articles_df = articles_df.drop(columns=['word_count'])
+            
+            articles_df["keywords"] = keywords
+
+            # Concatenate the current dataframe with the previous ones
+            concatenated_df = pd.concat([concatenated_df, articles_df], ignore_index=True)
+
+        return concatenated_df
+
+    except Exception as e:
+        print(f"An error occurred while fetching articles: {e}")
+        return None
+
+# ----------------------------------------------------- ******************************** -----------------------------------------------------
+def cleaning_articles(df: pd.DataFrame) -> pl.DataFrame:
+    """
+    Cleans and transforms a DataFrame containing news articles.
+
+    This function performs the following cleaning and transformation tasks:
+    - Removes newline characters and backslashes from the article text.
+    - Renames columns.
+    - Selects desired columns.
+    - Converts published time to datetime.
+    - Extracts the date from the published time.
+    - Reorders columns.
+
+    Parameters:
+    - df (pd.DataFrame): The input DataFrame containing news articles.
+
+    Returns:
+    - pl.DataFrame: A cleaned and transformed Polars DataFrame.
+    """
+    try:
+        # Clean the full text column
+        df["article_text"] = df["article_text"].replace("\n", "", regex=True)
+        df["article_text"] = df["article_text"].replace("\r", "", regex=True)
+        df["article_text"] = df["article_text"].replace(r"\\", "", regex=True)
+
+        # Rename columns and select desired columns for the final DataFrame
+        df = df.rename(columns={"published date": "published_time"})
+        df = df[["keywords", "publisher", "title", "article_text", "url", "published_time", "image"]]
+        df["publisher"] = df["publisher"].apply(lambda x: x["title"])
+
+        # Convert published time to datetime
+        df["published_time"] = pd.to_datetime(df["published_time"])
+
+        # Extract the date from the published time
+        df["published_date"] = df["published_time"].dt.date
+
+        # Reorder columns
+        df = df[["keywords", "title", "article_text", "url", "image", "publisher", "published_time", "published_date"]]
+        df = df[~(df["article_text"]=="Error: article download failed")]
+
+        # Convert to a Polars DataFrame
+        pl_df = pl.from_pandas(df)
+
+        pl_df = pl_df.sort(by="published_time", descending=True)
+
+        return pl_df
+
+    except Exception as e:
+        print(f"An error occurred while cleaning articles: {e}")
         return None
 
 # ----------------------------------------------------- ******************************** -----------------------------------------------------
