@@ -16,7 +16,7 @@ def main():
     try:
         # Set keywords
         keywords = ["kebakaran hutan", "polusi udara"]
-        articles_df = fetch_articles(keywords, 100, 14)
+        articles_df = fetch_articles(keywords, 30, 3)
         articles_df = cleaning_articles(articles_df)
 
         # Retrieves the most recently updated data from the database

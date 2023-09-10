@@ -1,18 +1,14 @@
 import polars as pl
 import pandas as pd
-import io
 import requests
 import datetime
 import time
-import os
+
+import geopandas as gpd
+from shapely.geometry import Point
 
 from gnews import GNews
-import nltk
 from newspaper import Article
-
-from supabase import create_client, Client
-
-from dotenv import dotenv_values
 
 # ----------------------------------------------------- ******************************** -----------------------------------------------------
 def fetch_viirs_data(today: str, day_range: str, token: str) -> pl.DataFrame:
@@ -46,6 +42,24 @@ def fetch_viirs_data(today: str, day_range: str, token: str) -> pl.DataFrame:
     except Exception as e:
         print(f"An unexpected error occurred: {e}")
         return None
+# ----------------------------------------------------- ******************************** -----------------------------------------------------
+def extract_administrative(df: pl.DataFrame) -> pd.DataFrame:
+
+    # cast to pandas dataframe
+    # load administrative boundaries
+    viirs = df.to_pandas()
+    file_path = "./data/IndonesianCitiesDistrictsUpdated.json"
+    adm_df = gpd.read_file(file_path)
+
+    # Zip lat-lon as tuple, convert to Points object
+    viirs["coords"] = list(zip(viirs["longitude"], viirs["latitude"]))
+    viirs["coords"] = viirs["coords"].apply(Point)
+
+    # Turn into geodataframe, perform spatial join
+    points = gpd.GeoDataFrame(viirs, geometry="coords")
+    joined_df = gpd.tools.sjoin(points, adm_df, predicate="within", how='left')
+
+    return joined_df
 
 # ----------------------------------------------------- ******************************** -----------------------------------------------------
 def fetch_last_data(query: str, uri_connection: str) -> pl.DataFrame:
@@ -68,44 +82,69 @@ def fetch_last_data(query: str, uri_connection: str) -> pl.DataFrame:
         return None
 
 # ----------------------------------------------------- ******************************** -----------------------------------------------------
-def cleaning_fetched_data(df: pl.DataFrame) -> pl.DataFrame:
+def cleaning_fetched_data(df: pd.DataFrame) -> pl.DataFrame:
     """
     Cleans the newly fetched data by dropping unnecessary columns, adding a new column,
     and casting columns to align with the data types of the last fetched data from the database.
 
     Parameters:
-    - df (pl.DataFrame): A Polars DataFrame containing the fetched data to be cleaned.
+    - df (pd.DataFrame): A Pandas DataFrame containing the fetched data to be cleaned.
 
     Returns:
     - pl.DataFrame: A cleaned Polars DataFrame with aligned column data types.
     """
 
     try:
-        # Add a new 'type' column with default value None
-        df = df.with_columns(
-            type=pl.lit(None)
+        # # Add a new 'type' column with default value None
+        # df = df.with_columns(
+        #     type=pl.lit(None)
+        # )
+
+        # # Select and cast specific columns to align with the desired data types
+        # df = df.select(
+        #     pl.col("latitude").cast(pl.Float64),
+        #     pl.col("longitude").cast(pl.Float64),
+        #     pl.col("bright_ti4").cast(pl.Float32).alias("brightness"),
+        #     pl.col("scan").cast(pl.Float32),
+        #     pl.col("track").cast(pl.Float32),
+        #     pl.col("acq_date").str.strptime(pl.Date, "%Y-%m-%d"),
+        #     pl.col("acq_time").cast(pl.Int32),
+        #     pl.col("satellite").cast(pl.Utf8),
+        #     pl.col("instrument").cast(pl.Utf8),
+        #     pl.col("confidence").cast(pl.Utf8),
+        #     pl.col("version").cast(pl.Utf8),
+        #     pl.col("bright_ti5").cast(pl.Float32).alias("bright_t31"),
+        #     pl.col("frp").cast(pl.Float32),
+        #     pl.col("daynight").cast(pl.Utf8),
+        #     pl.col("type").cast(pl.Int32)
+        # )
+
+        # change datetype format
+        df["acq_date"] = pd.to_datetime(df["acq_date"]).dt.strftime('%Y-%m-%d')
+
+        # replace values
+        df["confidence"] = df["confidence"].replace({
+            "n":"Nominal", "h":"High", "l":"Low"
+        })
+
+        df["daynight"] = df["daynight"].replace({
+            "D":"Day", "N":"Night"
+        })
+
+        # Rename some columns, drop the unnecessary ones for the analysis
+        df = df.rename(columns={
+            "id":"second_adm", "provinsi":"first_adm", "bright_ti4":"brightness"
+        })
+
+        df = df.drop(["country_id", "scan", "track", "bright_ti5", "coords", "index_right"], axis=1)
+
+
+        pl_df = pl.from_pandas(df)
+        pl_df = pl_df.with_columns(
+            pl.col("acq_date").str.strptime(pl.Date, "%Y-%m-%d")
         )
 
-        # Select and cast specific columns to align with the desired data types
-        df = df.select(
-            pl.col("latitude").cast(pl.Float64),
-            pl.col("longitude").cast(pl.Float64),
-            pl.col("bright_ti4").cast(pl.Float32).alias("brightness"),
-            pl.col("scan").cast(pl.Float32),
-            pl.col("track").cast(pl.Float32),
-            pl.col("acq_date").str.strptime(pl.Date, "%Y-%m-%d"),
-            pl.col("acq_time").cast(pl.Int32),
-            pl.col("satellite").cast(pl.Utf8),
-            pl.col("instrument").cast(pl.Utf8),
-            pl.col("confidence").cast(pl.Utf8),
-            pl.col("version").cast(pl.Utf8),
-            pl.col("bright_ti5").cast(pl.Float32).alias("bright_t31"),
-            pl.col("frp").cast(pl.Float32),
-            pl.col("daynight").cast(pl.Utf8),
-            pl.col("type").cast(pl.Int32)
-        )
-
-        return df
+        return pl_df
 
     except Exception as e:
         print(f"An error occurred while cleaning the data: {e}")
@@ -237,6 +276,7 @@ def fetch_articles(keywords_list: list, max_results: int, day_range: int) -> pd.
 
                     # Try to get the image URL and append it to the list
                     image = list(get_article.images)[0] if get_article.images else None
+                    # image = get_article.top_image
                     images.append(image)
 
                     articles.append(full_text)
