@@ -27,3 +27,4 @@ src.egg-info
 .gitignore
 
 .notebooks/
+*.ipynb
