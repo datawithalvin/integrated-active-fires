@@ -26,4 +26,4 @@ src.egg-info
 
 .gitignore
 
-notebooks/
+.notebooks/
