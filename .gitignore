@@ -25,3 +25,5 @@ setup.py
 src.egg-info
 
 .gitignore
+
+.notevooks/
