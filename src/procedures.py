@@ -10,6 +10,8 @@ from shapely.geometry import Point
 from gnews import GNews
 from newspaper import Article
 
+import plotly.express as px
+
 # ----------------------------------------------------- ******************************** -----------------------------------------------------
 def fetch_viirs_data(today: str, day_range: str, token: str) -> pl.DataFrame:
     """
@@ -365,3 +367,43 @@ def cleaning_articles(df: pd.DataFrame) -> pl.DataFrame:
         return None
 
 # ----------------------------------------------------- ******************************** -----------------------------------------------------
+
+
+
+# ----------------------------------------------------- DASH VIZ -----------------------------------------------------
+def generate_density_map(n_day: int, uri_connection: str):
+    value = n_day
+
+    CONNECTION_URI = uri_connection
+    query = f"""
+        SELECT latitude, longitude, acq_date, acq_time, confidence, frp, brightness, second_adm, first_adm
+        FROM processed_viirs 
+        WHERE acq_date > CURRENT_DATE - INTERVAL '{value} day'"""
+
+    processed_viirs = fetch_last_data(query=query, uri_connection=CONNECTION_URI)
+    df_viirs = processed_viirs.to_pandas()
+
+    df_viirs = df_viirs.rename(columns={"frp":"Fire Radiative Power", "second_adm": "Kabupaten/Kota", "first_adm":"Provinsi",
+                                    "acq_date":"Tanggal", "confidence":"Confidence", "brightness":"Brightness"})
+
+    df_viirs["Tanggal"] = df_viirs["Tanggal"].astype(str)
+
+    hover_dict = {"latitude":False, "longitude":False, "Tanggal":True, "acq_time":False, 
+                "Confidence":True,"Fire Radiative Power":True, "Kabupaten/Kota":True, 
+                "Provinsi":False, "Brightness":True}
+
+
+    map_fig = px.density_mapbox(df_viirs, lat="latitude", lon="longitude", z="Brightness",
+                                radius=1, hover_name="Provinsi",
+                                hover_data=hover_dict,
+                                center=dict(lat=-2.5, lon=118), zoom=3.7, color_continuous_scale="matter_r", 
+                                mapbox_style="open-street-map", template="plotly_white"
+                                )
+
+    # map_fig.update_layout(autosize=False,width=1200,height=400)
+    map_fig.update_layout(autosize=True)
+    map_fig.update_layout(margin={"r":1,"t":1,"l":1,"b":1})
+    map_fig.update_layout({'plot_bgcolor': 'rgba(0, 0, 0, 0)','paper_bgcolor': 'rgba(0, 0, 0, 0)',})
+    map_fig.update_coloraxes(showscale=True, colorbar=dict(len=0.5, title="Brightness", thickness=15, orientation="h", y=0, title_side="top"))
+
+    return map_fig
