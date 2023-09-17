@@ -3,6 +3,8 @@ import pandas as pd
 import requests
 import datetime
 import time
+import json
+import io
 
 import geopandas as gpd
 from shapely.geometry import Point
@@ -11,6 +13,7 @@ from gnews import GNews
 from newspaper import Article
 
 import plotly.express as px
+import plotly.graph_objects as go
 
 # ----------------------------------------------------- ******************************** -----------------------------------------------------
 def fetch_viirs_data(today: str, day_range: str, token: str) -> pl.DataFrame:
@@ -383,27 +386,111 @@ def generate_density_map(n_day: int, uri_connection: str):
     processed_viirs = fetch_last_data(query=query, uri_connection=CONNECTION_URI)
     df_viirs = processed_viirs.to_pandas()
 
-    df_viirs = df_viirs.rename(columns={"frp":"Fire Radiative Power", "second_adm": "Kabupaten/Kota", "first_adm":"Provinsi",
-                                    "acq_date":"Tanggal", "confidence":"Confidence", "brightness":"Brightness"})
+    df_viirs.sort_values(by=["acq_date"], ascending=True, inplace=True)
 
-    df_viirs["Tanggal"] = df_viirs["Tanggal"].astype(str)
+    df_viirs = df_viirs.rename(columns={"frp":"Fire Radiative Power", "second_adm": "District", "first_adm":"Province",
+                                    "acq_date":"Date", "confidence":"Confidence", "brightness":"Brightness"})
 
-    hover_dict = {"latitude":False, "longitude":False, "Tanggal":True, "acq_time":False, 
-                "Confidence":True,"Fire Radiative Power":True, "Kabupaten/Kota":True, 
-                "Provinsi":False, "Brightness":True}
+    df_viirs["Date"] = df_viirs["Date"].astype(str)
+
+    # dff = pd.read_json(data, orient='split')
+
+    hover_dict = {"latitude":False, "longitude":False, "Date":True, "acq_time":False, 
+                "Confidence":True,"Fire Radiative Power":True, "District":True, 
+                "Province":False, "Brightness":True}
 
 
     map_fig = px.density_mapbox(df_viirs, lat="latitude", lon="longitude", z="Brightness",
-                                radius=1, hover_name="Provinsi",
+                                radius=2, hover_name="Province",
                                 hover_data=hover_dict,
-                                center=dict(lat=-2.5, lon=118), zoom=3.7, color_continuous_scale="matter_r", 
-                                mapbox_style="open-street-map", template="plotly_white"
+                                center=dict(lat=-2.5, lon=118), zoom=3.6, color_continuous_scale="matter_r", 
+                                mapbox_style="open-street-map", template="plotly_dark", animation_frame="Date"
                                 )
-
-    # map_fig.update_layout(autosize=False,width=1200,height=400)
+    
+    
     map_fig.update_layout(autosize=True)
-    map_fig.update_layout(margin={"r":1,"t":1,"l":1,"b":1})
+    map_fig.update_layout(margin={"r":0,"t":0,"l":0,"b":0})
     map_fig.update_layout({'plot_bgcolor': 'rgba(0, 0, 0, 0)','paper_bgcolor': 'rgba(0, 0, 0, 0)',})
-    map_fig.update_coloraxes(showscale=True, colorbar=dict(len=0.5, title="Brightness", thickness=15, orientation="h", y=0, title_side="top"))
+    map_fig.update_coloraxes(showscale=True, colorbar=dict(len=0.3, title="Brightness", thickness=10, orientation="h", y=0, x=0.15, title_side="top"))
 
-    return map_fig
+    last_frame_num = int(len(map_fig.frames) -1)
+    map_fig.layout['sliders'][0]['active'] = last_frame_num
+    map_fig = go.Figure(data=map_fig['frames'][last_frame_num]['data'], frames=map_fig['frames'], layout=map_fig.layout)
+
+    map_fig.update_layout(sliders=[dict(pad={"r":50, "l":50})])
+
+    return map_fig, df_viirs.to_json(date_format='iso', orient='split')
+
+
+def generate_line_chart(data: json):
+
+    dff = pd.read_json(io.StringIO(data), orient='split')
+    dff.index = pd.DatetimeIndex(dff["Date"])
+
+    print(dff)
+
+    # Upsample to daily frequency and count the number of fires in each day
+    dff = dff.resample('D')['Fire Radiative Power'].count()
+
+    fig = px.area(dff, x=dff.index, y=dff.values,
+            labels={"y":"<b>Detected Fires Count</b>", "Date":""}, template="plotly_dark")
+
+    fig.update_layout(autosize=True)
+    fig.update_layout(margin={"r":0,"t":0,"l":0,"b":0})
+    fig.update_traces(line_color='indianred')
+    fig.update_layout({'plot_bgcolor': 'rgba(0, 0, 0, 0)','paper_bgcolor': 'rgba(0, 0, 0, 0)',})
+    fig.update_yaxes(title_font=dict(size=12), zeroline=True, zerolinewidth=2)
+    fig.update_layout(xaxis_showgrid=True, yaxis_showgrid=False)
+
+    return fig
+
+
+def generate_top_prov(data: json):
+
+    dff = pd.read_json(io.StringIO(data), orient='split')
+    grouped = dff.groupby(["Province"]).agg(
+        total_fires = ("Fire Radiative Power", "count")
+        )
+
+    grouped = grouped.sort_values(by="total_fires", ascending=False).reset_index()
+    grouped = grouped.head(10)
+
+    fig = px.bar(grouped, x="total_fires", y="Province", orientation="h", text="total_fires",
+                    labels={"Province":"", "total_fires":"<b>Detected Fires Count</b>"}, template="plotly_dark")
+
+    fig.update_layout(yaxis={'categoryorder':'total ascending'})
+
+    fig.update_layout(autosize=True)
+    fig.update_layout(margin={"r":0,"t":0,"l":0,"b":0})
+    fig.update_traces(marker_color='indianred')
+    fig.update_layout({'plot_bgcolor': 'rgba(0, 0, 0, 0)','paper_bgcolor': 'rgba(0, 0, 0, 0)',})
+    fig.update_xaxes(title_font=dict(size=12), zeroline=True, zerolinewidth=2)
+    fig.update_layout(xaxis_showgrid=False, yaxis_showgrid=False)
+    
+
+    return fig
+
+def generate_top_kabkot(data: json):
+
+    dff = pd.read_json(io.StringIO(data), orient='split')
+    grouped = dff.groupby(["District"]).agg(
+        total_fires = ("Fire Radiative Power", "count")
+        )
+
+    grouped = grouped.sort_values(by="total_fires", ascending=False).reset_index()
+    grouped = grouped.head(10)
+
+    fig = px.bar(grouped, x="total_fires", y="District", orientation="h", text="total_fires",
+                    labels={"District":"", "total_fires":"<b>Detected Fires Count</b>"}, template="plotly_dark")
+
+    fig.update_layout(yaxis={'categoryorder':'total ascending'})
+
+    fig.update_layout(autosize=True)
+    fig.update_layout(margin={"r":0,"t":0,"l":0,"b":0})
+    fig.update_traces(marker_color='indianred')
+    fig.update_layout({'plot_bgcolor': 'rgba(0, 0, 0, 0)','paper_bgcolor': 'rgba(0, 0, 0, 0)',})
+    fig.update_xaxes(title_font=dict(size=12), zeroline=True, zerolinewidth=2)
+    fig.update_layout(xaxis_showgrid=False, yaxis_showgrid=False)
+    
+
+    return fig

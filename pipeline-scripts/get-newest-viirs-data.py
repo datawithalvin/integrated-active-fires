@@ -22,8 +22,8 @@ def main():
         token = config.get("TOKEN")
 
         today = datetime.date.today()
-        yesterday = str(today - datetime.timedelta(days=1))
-        day_range = "2"
+        yesterday = str(today - datetime.timedelta(days=2))
+        day_range = "3"
 
         viirs_data = fetch_viirs_data(today=yesterday, day_range=day_range, token=token)
         viirs_data = extract_administrative(viirs_data)
@@ -34,7 +34,7 @@ def main():
         query = """
             SELECT * 
             FROM processed_viirs 
-            WHERE acq_date > CURRENT_DATE - INTERVAL '2 day'"""
+            WHERE acq_date > CURRENT_DATE - INTERVAL '3 day'"""
 
         last_data = fetch_last_data(query=query, uri_connection=CONNECTION_URI)
         last_data = last_data.drop(["id"])  # Drop unused column to avoid conflicts when appending

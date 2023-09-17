@@ -1,5 +1,7 @@
 # Indonesia Comprehensive Environmental Monitoring Dashboard
 
+![Dashboard Screenshot](documentation/screen-capture-dashboard.png)
+
 ## Overview
 The Comprehensive Environmental Monitoring Dashboard is a personal project aimed at building an integrated web application to monitor and visualize active fire hotspots, air quality data, recent news, and statistical information for various provinces and areas in Indonesia. The project aims to provide users with near-real-time insights into environmental conditions and trends.
 
@@ -11,6 +13,5 @@ The dashboard is designed to be informative, user-friendly, and visually appeali
 * Web Application: Building a web application using Dash Plotly for interactive and dynamic data visualization.
 * Containerization: Considering Docker to containerize the application for easy deployment and scalability.
 
-
 ## Current Status
-The project is currently in the early development stages. The ETL pipeline has been successfully implemented to fetch and process environmental data. However, there are still several components and features to be developed, tested, and integrated to create a fully functional dashboard.
+The project has progressed beyond its early stages, with the ETL pipeline successfully implemented to fetch and process environmental data. Currently, I am in the finishing stage, focusing on enhancing the front-end to make it more visually appealing and user-friendly. Once the user interface is refined, the next steps involve deploying the application and implementing orchestration to ensure seamless operation.

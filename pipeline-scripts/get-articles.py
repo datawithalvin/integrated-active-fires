@@ -15,8 +15,8 @@ def main():
 
     try:
         # Set keywords
-        keywords = ["kebakaran hutan", "polusi udara"]
-        articles_df = fetch_articles(keywords, 30, 3)
+        keywords = ["kebakaran hutan", "polusi udara", "kebakaran lahan"]
+        articles_df = fetch_articles(keywords, 15, 2)
         articles_df = cleaning_articles(articles_df)
 
         # Retrieves the most recently updated data from the database
@@ -24,7 +24,7 @@ def main():
         query = """
             SELECT * 
             FROM articles 
-            WHERE published_date > CURRENT_DATE - INTERVAL '7 day'"""
+            WHERE published_date > CURRENT_DATE - INTERVAL '3 day'"""
         
         
         last_data = fetch_last_data(query=query, uri_connection=CONNECTION_URI)

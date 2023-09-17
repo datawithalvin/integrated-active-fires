@@ -1,0 +1,22 @@
+.column_left {
+    border-right: 5px double #032b60;
+}
+
+.row_separator {
+    /* border-bottom: 5px double #032b60; */
+    border-top: 5px double #032b60;
+}
+
+.row_separator2 {
+    border-bottom: 5px double #032b60;
+    border-top: 5px double #032b60;
+}
+
+.col_separator {
+    border-right: 5px double #032b60;
+}
+
+.col_separator2 {
+    border-left: 5px double #032b60;
+    border-right: 5px double #032b60;
+}
