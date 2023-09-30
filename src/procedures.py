@@ -14,6 +14,7 @@ from newspaper import Article
 
 import plotly.express as px
 import plotly.graph_objects as go
+import altair as alt
 
 # ----------------------------------------------------- ******************************** -----------------------------------------------------
 def fetch_viirs_data(today: str, day_range: str, token: str) -> pl.DataFrame:
@@ -400,24 +401,25 @@ def generate_density_map(n_day: int, uri_connection: str):
                 "Province":False, "Brightness":True}
 
 
-    map_fig = px.density_mapbox(df_viirs, lat="latitude", lon="longitude", z="Brightness",
-                                radius=2, hover_name="Province",
+    map_fig = px.density_mapbox(df_viirs, lat="latitude", lon="longitude", z="Fire Radiative Power",
+                                radius=3, hover_name="Province",
                                 hover_data=hover_dict,
                                 center=dict(lat=-2.5, lon=118), zoom=3.6, color_continuous_scale="matter_r", 
-                                mapbox_style="open-street-map", template="plotly_dark", animation_frame="Date"
+                                mapbox_style="carto-positron", template="plotly_dark", animation_frame="Date"
                                 )
     
     
     map_fig.update_layout(autosize=True)
     map_fig.update_layout(margin={"r":0,"t":0,"l":0,"b":0})
     map_fig.update_layout({'plot_bgcolor': 'rgba(0, 0, 0, 0)','paper_bgcolor': 'rgba(0, 0, 0, 0)',})
-    map_fig.update_coloraxes(showscale=True, colorbar=dict(len=0.3, title="Brightness", thickness=10, orientation="h", y=0, x=0.15, title_side="top"))
+    map_fig.update_coloraxes(showscale=True, colorbar=dict(len=0.3, title="Fire Radiative Power", thickness=10, orientation="h", y=0, x=0.15, title_side="top"))
 
     last_frame_num = int(len(map_fig.frames) -1)
     map_fig.layout['sliders'][0]['active'] = last_frame_num
     map_fig = go.Figure(data=map_fig['frames'][last_frame_num]['data'], frames=map_fig['frames'], layout=map_fig.layout)
 
-    map_fig.update_layout(sliders=[dict(pad={"r":50, "l":50})])
+    map_fig["layout"].pop("updatemenus")
+    map_fig.update_layout(sliders=[dict(pad={"r":50, "l":10, "t":0})])
 
     return map_fig, df_viirs.to_json(date_format='iso', orient='split')
 
@@ -425,6 +427,13 @@ def generate_density_map(n_day: int, uri_connection: str):
 def generate_line_chart(data: json):
 
     dff = pd.read_json(io.StringIO(data), orient='split')
+    fires_count = dff['Fire Radiative Power'].count()
+    confidence_count = dff["Confidence"][dff["Confidence"]=="High"].count()
+
+    fires_count_formatted = f"{fires_count:,}"
+    confidence_count_formatted = f"{confidence_count:,}"
+
+
     dff.index = pd.DatetimeIndex(dff["Date"])
 
     print(dff)
@@ -433,7 +442,7 @@ def generate_line_chart(data: json):
     dff = dff.resample('D')['Fire Radiative Power'].count()
 
     fig = px.area(dff, x=dff.index, y=dff.values,
-            labels={"y":"<b>Detected Fires Count</b>", "Date":""}, template="plotly_dark")
+            labels={"y":"<b>Titik Api Terdeteksi</b>", "Date":""}, template="plotly_dark")
 
     fig.update_layout(autosize=True)
     fig.update_layout(margin={"r":0,"t":0,"l":0,"b":0})
@@ -442,7 +451,10 @@ def generate_line_chart(data: json):
     fig.update_yaxes(title_font=dict(size=12), zeroline=True, zerolinewidth=2)
     fig.update_layout(xaxis_showgrid=True, yaxis_showgrid=False)
 
-    return fig
+    # print(fires_count)
+    # print(confidence_count)
+
+    return fig, fires_count_formatted, confidence_count_formatted
 
 
 def generate_top_prov(data: json):
@@ -453,10 +465,10 @@ def generate_top_prov(data: json):
         )
 
     grouped = grouped.sort_values(by="total_fires", ascending=False).reset_index()
-    grouped = grouped.head(10)
+    grouped = grouped.head(5)
 
     fig = px.bar(grouped, x="total_fires", y="Province", orientation="h", text="total_fires",
-                    labels={"Province":"", "total_fires":"<b>Detected Fires Count</b>"}, template="plotly_dark")
+                    labels={"Province":"", "total_fires":"<b>Titik Api Terdeteksi</b>"}, template="plotly_dark")
 
     fig.update_layout(yaxis={'categoryorder':'total ascending'})
 
@@ -478,10 +490,10 @@ def generate_top_kabkot(data: json):
         )
 
     grouped = grouped.sort_values(by="total_fires", ascending=False).reset_index()
-    grouped = grouped.head(10)
+    grouped = grouped.head(5)
 
     fig = px.bar(grouped, x="total_fires", y="District", orientation="h", text="total_fires",
-                    labels={"District":"", "total_fires":"<b>Detected Fires Count</b>"}, template="plotly_dark")
+                    labels={"District":"", "total_fires":"<b>Titik Api Terdeteksi</b>"}, template="plotly_dark")
 
     fig.update_layout(yaxis={'categoryorder':'total ascending'})
 
@@ -494,3 +506,31 @@ def generate_top_kabkot(data: json):
     
 
     return fig
+
+
+def generate_calendar(dataframe):
+    heatmap = alt.Chart(dataframe.reset_index()).mark_rect().encode(
+        x=alt.X("date", timeUnit="date", type="ordinal", title=""),
+        y=alt.Y("date", timeUnit="month", type="ordinal", title=""),
+        color=alt.Color("max_temp_c", scale=alt.Scale(scheme="inferno", reverse=True),
+        legend=alt.Legend(title=["Temp (C)"])),
+        # legend=alt.Legend(title=["Temp (C)"], titleColor="white", labelColor="white")),
+        tooltip=[
+            alt.Tooltip("date", title="Tanggal: ", format="%B %d, %Y"),  # Add date to tooltip
+            alt.Tooltip("max_temp_c", title="Temperatur Maksimum: ")
+        ]
+        ).properties(
+            width=500, 
+            height=275,
+        ).configure_view(
+            strokeWidth=0
+        # ).configure(
+        #     background="transparent"  # Set background to transparent here
+        ).configure_axis(
+            labelFontSize=10,
+            titleFontSize=14,
+            # labelColor="white",
+            # titleColor="white"
+        )
+    
+    return heatmap.to_html()
